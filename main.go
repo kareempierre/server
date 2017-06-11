@@ -17,6 +17,6 @@ func main() {
 
 	defer db.Close()
 
-	router.db = db
+	router.DB = db
 	router.HandleRequests()
 }

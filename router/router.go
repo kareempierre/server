@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
+	"time"
 
+	"github.com/auth0/go-jwt-middleware"
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 )
 
@@ -21,26 +23,50 @@ type Article struct {
 // Articles type is an array of Articles.
 type Articles []Article
 
+var middleware = jwtmiddleware.New(jwtmiddleware.Options{
+	ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
+		return key, nil
+	},
+	SigningMethod: jwt.SigningMethodHS256,
+})
+
+// DB refers to the database
 var (
-	db *sql.DB
+	DB  *sql.DB
+	key = []byte("secret")
 )
 
 // HandleRequests deals with all incoming requests
 func HandleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
+	v2 := myRouter.PathPrefix("/v1").Subrouter()
 
-	myRouter.HandleFunc("/v1/auth", auth)
+	// authentication routes
+	v2.HandleFunc("/auth", auth).Methods("GET")
 
-	myRouter.HandleFunc("/v1/users", users)
-	myRouter.HandleFunc("/v1/users/{user}", user)
+	// user routes
+	v2.HandleFunc("/users", users).Methods("GET")
+	v2.HandleFunc("/users/{user}", user).Methods("GET")
 
 	myRouter.HandleFunc("/all", returnAllArticles)
 	myRouter.HandleFunc("/article/{id}", returnSingleArticle)
-	log.Fatal(http.ListenAndServe(":12000", myRouter))
+	http.ListenAndServe(":12000", v2)
 }
 
 // auth is used to authenticate the user logging in
 func auth(res http.ResponseWriter, req *http.Request) {
+	res.Header().Set("Content-Type", "application/json")
+
+	token := jwt.New(jwt.SigningMethodHS256)
+	claims := token.Claims.(jwt.MapClaims)
+
+	claims["admin"] = true
+	claims["name"] = "Ado Kukic"
+	claims["exp"] = time.Now().Add(time.Hour * 24).Unix()
+
+	tokenString, _ := token.SignedString(key)
+
+	fmt.Println(tokenString)
 
 }
 
