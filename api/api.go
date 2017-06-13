@@ -5,15 +5,20 @@ package api
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/codegangsta/negroni"
+	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/dgrijalva/jwt-go/request"
 	"github.com/gorilla/mux"
 )
 
 // DB refers to the database
 var (
-	DB *sql.DB
+	DB        *sql.DB
+	VerifyKey []byte
+	SignKey   []byte
 )
 
 // API deals with all incoming requests
@@ -33,6 +38,7 @@ func API() {
 		negroni.Wrap(protectedUserBaseRoute),
 	))
 
+	// Protected user routes
 	protectedUserRoute := protectedUserBaseRoute.PathPrefix("users").Subrouter()
 	protectedUserRoute.HandleFunc("/users", usersHandler).Methods("GET")
 	protectedUserRoute.HandleFunc("/users/{user}", viewUserHandler).Methods("GET")
@@ -58,5 +64,20 @@ func viewUserHandler(res http.ResponseWriter, req *http.Request) {
 }
 
 func authMiddleware(res http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
-	next(res, req)
+	token, err := request.ParseFromRequest(req, request.AuthorizationHeaderExtractor,
+		func(token *jwt.Token) (interface{}, error) {
+			return VerifyKey, nil
+		})
+	if err != nil {
+		log.Fatal("Error: Unauthorized access")
+		return
+	}
+	if token.Valid {
+		next(res, req)
+	}
+	if !token.Valid {
+		res.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(res, "Token is not Valid")
+	}
+
 }

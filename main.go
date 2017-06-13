@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"io/ioutil"
 	"log"
 
@@ -14,17 +15,10 @@ const (
 	pubKeyPath  = "keys/app.rsa.pub"
 )
 
-var (
-	// VerifyKey is the path to the public key
-	VerifyKey []byte
-	// SignKey is the path to the private key
-	SignKey []byte
-)
-
 func main() {
 	// Initialize keys
 	initKeys()
-
+	fmt.Println(VerifyKey, SignKey)
 	db, err := sql.Open("postgres", "dbname=Bishop port=27108 sslmode=disable")
 	if err != nil {
 		log.Fatal(err)
@@ -34,24 +28,26 @@ func main() {
 
 	api.DB = db
 
-	api.Api()
+	api.API()
 }
 
 func initKeys() {
 	var err error
 
 	// SignKey is the private key
-	SignKey, err = ioutil.ReadFile(privKeyPath)
+	api.SignKey, err = ioutil.ReadFile(privKeyPath)
 	if err != nil {
 		log.Fatal("Error reading private key")
 		return
 	}
 
 	// VerifyKey is the public key
-	VerifyKey, err = ioutil.ReadFile(pubKeyPath)
+	api.VerifyKey, err = ioutil.ReadFile(pubKeyPath)
 	if err != nil {
 		log.Fatal("Error reading public key")
 		return
 	}
+
+	//return SignKey, VerifyKey
 
 }
