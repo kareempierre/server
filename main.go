@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"io/ioutil"
 	"log"
 
@@ -11,23 +10,32 @@ import (
 )
 
 const (
+	// privKeyPath is the path to the private key
 	privKeyPath = "keys/app.rsa"
-	pubKeyPath  = "keys/app.rsa.pub"
+	// pubkeyPath is the path to the public key
+	pubKeyPath = "keys/app.rsa.pub"
 )
 
 func main() {
+
 	// Initialize keys
 	initKeys()
-	fmt.Println(VerifyKey, SignKey)
+
+	// initialize database
 	db, err := sql.Open("postgres", "dbname=Bishop port=27108 sslmode=disable")
+
+	// Check for error on database initialization
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// close database when server stops
 	defer db.Close()
 
+	// Send database to api
 	api.DB = db
 
+	// Initialize API
 	api.API()
 }
 

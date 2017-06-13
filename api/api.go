@@ -14,11 +14,13 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// DB refers to the database
 var (
-	DB        *sql.DB
+	// DB is the postregres database
+	DB *sql.DB
+	// VerifyKey is the public key
 	VerifyKey []byte
-	SignKey   []byte
+	// SignKey is the private key
+	SignKey []byte
 )
 
 // API deals with all incoming requests
@@ -43,38 +45,51 @@ func API() {
 	protectedUserRoute.HandleFunc("/users", usersHandler).Methods("GET")
 	protectedUserRoute.HandleFunc("/users/{user}", viewUserHandler).Methods("GET")
 
+	// Protected gallery, threads, posts for admin
+
 	// Spin up api
 	http.ListenAndServe(":12000", v2)
 }
 
 // authHandler is used to authenticate the user logging in
 func authHandler(res http.ResponseWriter, req *http.Request) {
+
+	// Set Content header type on response
 	res.Header().Set("Content-Type", "application/json")
 
 }
 
-// users returns all users for a specific organization
+// usersHandler returns all users for a specific organization
 func usersHandler(res http.ResponseWriter, req *http.Request) {
+
 	fmt.Println("Endpoint Hit: user")
 }
 
-// user requests information based on the user being viewed
+// viewUserHandler requests information based on the user being viewed in the admin section
 func viewUserHandler(res http.ResponseWriter, req *http.Request) {
 
 }
 
+// authMiddleware authenticates the user logging in
 func authMiddleware(res http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+
+	// token is returned if the Authrization in the header matches with the users token
 	token, err := request.ParseFromRequest(req, request.AuthorizationHeaderExtractor,
 		func(token *jwt.Token) (interface{}, error) {
 			return VerifyKey, nil
 		})
+
+	// check to see if there is an error
 	if err != nil {
 		log.Fatal("Error: Unauthorized access")
 		return
 	}
+
+	// Check to see if the token is valid
 	if token.Valid {
 		next(res, req)
 	}
+
 	if !token.Valid {
 		res.WriteHeader(http.StatusUnauthorized)
 		fmt.Fprint(res, "Token is not Valid")
