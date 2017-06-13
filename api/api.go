@@ -8,11 +8,21 @@ import (
 	"log"
 	"net/http"
 
+	"encoding/json"
+
 	"github.com/codegangsta/negroni"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
 	"github.com/gorilla/mux"
+	// the use for the database
+	_ "github.com/lib/pq"
 )
+
+// UserCredentials requires an Email and Password
+type UserCredentials struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
 
 var (
 	// DB is the postregres database
@@ -41,21 +51,37 @@ func API() {
 	))
 
 	// Protected user routes
-	protectedUserRoute := protectedUserBaseRoute.PathPrefix("users").Subrouter()
+	protectedUserRoute := protectedUserBaseRoute.PathPrefix("/users").Subrouter()
 	protectedUserRoute.HandleFunc("/users", usersHandler).Methods("GET")
 	protectedUserRoute.HandleFunc("/users/{user}", viewUserHandler).Methods("GET")
 
 	// Protected gallery, threads, posts for admin
 
 	// Spin up api
-	http.ListenAndServe(":12000", v2)
+	fmt.Println("Server is running")
+	http.ListenAndServe(":12000", myRouter)
 }
 
 // authHandler is used to authenticate the user logging in
 func authHandler(res http.ResponseWriter, req *http.Request) {
-
+	var user UserCredentials
 	// Set Content header type on response
-	res.Header().Set("Content-Type", "application/json")
+	//res.Header().Set("Content-Type", "application/json")
+	err := json.NewDecoder(req.Body).Decode(&user)
+
+	if err != nil {
+		res.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(res, "Error in request")
+	}
+
+	// DB query needs to be made here
+	rows, err := DB.Query("SELECT * FROM users")
+	fmt.Println(rows)
+	if err != nil {
+		log.Fatal("Error: Fetching Rows from db")
+		return
+	}
+	defer rows.Close()
 
 }
 

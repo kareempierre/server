@@ -22,11 +22,15 @@ func main() {
 	initKeys()
 
 	// initialize database
-	db, err := sql.Open("postgres", "dbname=Bishop port=27108 sslmode=disable")
+	db, err := sql.Open("postgres", "dbname=Bishop port=27018 sslmode=disable")
 
 	// Check for error on database initialization
 	if err != nil {
 		log.Fatal(err)
+	}
+	err = db.Ping()
+	if err != nil {
+		log.Fatal("Error: Could not establish a connection with the database")
 	}
 
 	// close database when server stops
