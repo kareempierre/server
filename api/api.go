@@ -41,7 +41,7 @@ func API() {
 	v2 := myRouter.PathPrefix("/v2").Subrouter()
 
 	// Public endpoints
-	v2.HandleFunc("/auth", authHandler).Methods("GET")
+	v2.HandleFunc("/auth", authHandler).Methods("POST")
 
 	// Protected endpoints
 	protectedUserBaseRoute := mux.NewRouter()
@@ -64,25 +64,24 @@ func API() {
 
 // authHandler is used to authenticate the user logging in
 func authHandler(res http.ResponseWriter, req *http.Request) {
-	var user UserCredentials
+	var user, loggedInUser UserCredentials
+	//var email, password string
 	// Set Content header type on response
 	//res.Header().Set("Content-Type", "application/json")
 	err := json.NewDecoder(req.Body).Decode(&user)
-
 	if err != nil {
 		res.WriteHeader(http.StatusForbidden)
 		fmt.Fprint(res, "Error in request")
 	}
 
 	// DB query needs to be made here
-	rows, err := DB.Query("SELECT * FROM users")
-	fmt.Println(rows)
-	if err != nil {
+	rowErr := DB.QueryRow(`SELECT email, password  FROM users WHERE email=$1`, user.Email).Scan(&loggedInUser.Email, &loggedInUser.Password)
+	if rowErr != nil || rowErr == sql.ErrNoRows {
 		log.Fatal("Error: Fetching Rows from db")
 		return
 	}
-	defer rows.Close()
 
+	fmt.Println(loggedInUser)
 }
 
 // usersHandler returns all users for a specific organization
