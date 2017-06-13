@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/codegangsta/negroni"
 	"github.com/gorilla/mux"
 )
 
@@ -15,17 +16,27 @@ var (
 	DB *sql.DB
 )
 
-// HandleRequests deals with all incoming requests
-func HandleRequests() {
-	myRouter := mux.NewRouter().StrictSlash(true)
-	v2 := myRouter.PathPrefix("/v1").Subrouter()
+// API deals with all incoming requests
+func API() {
 
-	// authentication routes
+	// Route version
+	myRouter := mux.NewRouter().StrictSlash(true)
+	v2 := myRouter.PathPrefix("/v2").Subrouter()
+
+	// Public endpoints
 	v2.HandleFunc("/auth", authHandler).Methods("GET")
 
-	// user routes
-	v2.HandleFunc("/users", usersHandler).Methods("GET")
-	v2.HandleFunc("/users/{user}", viewUserHandler).Methods("GET")
+	// Protected endpoints
+	protectedUserBaseRoute := mux.NewRouter()
+	v2.PathPrefix("/users").Handler(negroni.New(
+		negroni.HandlerFunc(authMiddleware),
+		negroni.Wrap(protectedUserBaseRoute),
+	))
+
+	protectedUserRoute := protectedUserBaseRoute.PathPrefix("users").Subrouter()
+	protectedUserRoute.HandleFunc("/users", usersHandler).Methods("GET")
+	protectedUserRoute.HandleFunc("/users/{user}", viewUserHandler).Methods("GET")
+
 	// Spin up api
 	http.ListenAndServe(":12000", v2)
 }
@@ -44,4 +55,8 @@ func usersHandler(res http.ResponseWriter, req *http.Request) {
 // user requests information based on the user being viewed
 func viewUserHandler(res http.ResponseWriter, req *http.Request) {
 
+}
+
+func authMiddleware(res http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+	next(res, req)
 }

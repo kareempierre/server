@@ -32,9 +32,9 @@ func main() {
 
 	defer db.Close()
 
-	router.DB = db
+	api.DB = db
 
-	api.HandleRequests()
+	api.Api()
 }
 
 func initKeys() {
