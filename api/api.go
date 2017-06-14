@@ -45,6 +45,8 @@ var (
 	VerifyKey []byte
 	// SignKey is the private key
 	SignKey []byte
+	// SignedKey is the full key with signing
+	secretKey = "BANGERSANDMASH"
 )
 
 // API deals with all incoming requests
@@ -86,22 +88,52 @@ func createUser(res http.ResponseWriter, req *http.Request) {
 		fmt.Fprint(res, "Some fields were not filled correctly")
 	}
 
-	// Hash the password and check to see if the email address is already in use
-	hashedPassword, err := bcrypt.GenerateFromPassword(user.Password, bcrypt.DefaultCost)
-	if err != nil {
-		log.Fatal("Error: failed to convert the password")
-	}
+	//TODO: WILL NEED TO CHECK TO MAKE SURE THAT THE EMAIL DOES NOT ALREADY EXIST
 
-	rowErr := DB.QueryRow(
-		`INSERT INTO users(firstname, lastname, email, admin, creator, organization, password, register) 
-		VALUES($1,$2,$3,$4,$5,$6,$7)`,
-		user.FirstName, user.LastName, user.Email, false, false, user.Organization, hashedPassword, time.Now(),
-	)
-	if rowErr != nil {
-		log.Fatal("Error: error creating new user")
+	// Hash the password and check to see if the email address is already in use
+	// hashedPassword, err := bcrypt.GenerateFromPassword(user.Password, bcrypt.DefaultCost)
+	// if err != nil {
+	// 	log.Fatal("Error: failed to convert the password")
+	// }
+
+	// rowErr := DB.QueryRow(
+	// 	`INSERT INTO users(firstname, lastname, email, admin, creator, organization, password, register)
+	// 	VALUES($1,$2,$3,$4,$5,$6,$7)`,
+	// 	user.FirstName, user.LastName, user.Email, false, false, user.Organization, hashedPassword, time.Now(),
+	// )
+	// if rowErr != nil {
+	// 	log.Fatal("Error: error creating new user")
+	// }
+
+	token := jwt.New(jwt.SigningMethodHS256)
+
+	// set some claims
+	claims := make(jwt.MapClaims)
+	claims["username"] = user.Email
+	claims["password"] = user.Password
+	claims["exp"] = time.Now().Add(time.Hour * 72).Unix()
+	token.Claims = claims
+	SignedKey, err := token.SignedString(SignKey)
+	if err != nil {
+		log.Fatal("Error: Failed to sign key")
 	}
-	// save to postgres database
 	// return a token
+
+	userInfo, err := json.Marshal(struct {
+		FirstName string `json:"firstname"`
+		LastName  string `json:"lastname"`
+		Token     string `json:"token"`
+	}{
+		FirstName: user.FirstName,
+		LastName:  "tester",
+		Token:     SignedKey,
+	})
+	if err != nil {
+		log.Fatal("Error: error on creating json string")
+	}
+	fmt.Println(SignedKey)
+	res.Header().Set("Content-Type", "application/json")
+	res.Write(userInfo)
 
 }
 
