@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -77,11 +78,28 @@ func API() {
 }
 
 func createUser(res http.ResponseWriter, req *http.Request) {
-	// This takes all the information passed through as json data
-	// and creates a user
+	var user UserConstruct
+
+	err := json.NewDecoder(req.Body).Decode(&user)
+	if err != nil {
+		res.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(res, "Some fields were not filled correctly")
+	}
 
 	// Hash the password and check to see if the email address is already in use
+	hashedPassword, err := bcrypt.GenerateFromPassword(user.Password, bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatal("Error: failed to convert the password")
+	}
 
+	rowErr := DB.QueryRow(
+		`INSERT INTO users(firstname, lastname, email, admin, creator, organization, password, register) 
+		VALUES($1,$2,$3,$4,$5,$6,$7)`,
+		user.FirstName, user.LastName, user.Email, false, false, user.Organization, hashedPassword, time.Now(),
+	)
+	if rowErr != nil {
+		log.Fatal("Error: error creating new user")
+	}
 	// save to postgres database
 	// return a token
 
