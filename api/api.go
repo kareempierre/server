@@ -24,7 +24,7 @@ import (
 // UserCredentials requires an Email and Password
 type UserCredentials struct {
 	Email    string `json:"email"`
-	Password []byte `json:"password"`
+	Password string `json:"password"`
 }
 
 // UserConstruct is what you get back from the database
@@ -104,7 +104,6 @@ func createUser(res http.ResponseWriter, req *http.Request) {
 	}
 
 	results, err := stmt.Exec(user.FirstName, user.LastName, user.Email, false, false, user.Organization, string(hashedPassword), time.Now())
-	fmt.Println(results)
 	if err != nil {
 		log.Fatal("Error: on exec")
 	}
@@ -120,7 +119,6 @@ func createUser(res http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.Fatal("Error: Failed to sign key")
 	}
-	// return a token
 
 	userInfo, err := json.Marshal(struct {
 		FirstName string `json:"firstname"`
@@ -149,27 +147,49 @@ func authHandler(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(http.StatusForbidden)
 		fmt.Fprint(res, "Error in request")
 	}
-
 	// DB query needs to be made here
 	row := DB.QueryRow(`SELECT firstname, lastname, email, organization, creator, admin, password FROM users WHERE email=$1`, user.Email)
 	rowErr := row.Scan(&dbUser.FirstName, &dbUser.LastName, &dbUser.Email, &dbUser.Organization,
 		&dbUser.Creator, &dbUser.Admin, &dbUser.Password)
 
 	if rowErr != nil || rowErr == sql.ErrNoRows {
-		log.Fatal("Error: Fetching Rows from db")
+		log.Fatal("Error: Fetching Rows from db ")
 		return
 	}
-
-	err = bcrypt.CompareHashAndPassword([]byte(dbUser.Password), user.Password)
+	err = bcrypt.CompareHashAndPassword([]byte(dbUser.Password), []byte(user.Password))
 	if err != nil {
 		res.WriteHeader(http.StatusForbidden)
 		fmt.Fprint(res, "Invalid password")
 	}
 
-	//res.Header().Set("Content-Type", "application/json")
-	// create token and send it back as json data using json.unmarshal
-	// will have to read up on this
-	fmt.Println(dbUser)
+	token := jwt.New(jwt.SigningMethodHS256)
+
+	// set some claims
+	claims := make(jwt.MapClaims)
+	claims["username"] = dbUser.Email
+	claims["password"] = dbUser.Password
+	claims["exp"] = time.Now().Add(time.Hour * 72).Unix()
+	token.Claims = claims
+	SignedKey, err := token.SignedString(SignKey)
+	if err != nil {
+		log.Fatal("Error: Failed to sign key")
+	}
+
+	userInfo, err := json.Marshal(struct {
+		FirstName string `json:"firstname"`
+		LastName  string `json:"lastname"`
+		Token     string `json:"token"`
+	}{
+		FirstName: dbUser.FirstName,
+		LastName:  dbUser.LastName,
+		Token:     SignedKey,
+	})
+	if err != nil {
+		log.Fatal("Error: error on creating json string")
+	}
+	res.Header().Set("Content-Type", "application/json")
+	res.Write(userInfo)
+
 }
 
 // usersHandler returns all users for a specific organization
