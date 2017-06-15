@@ -32,10 +32,11 @@ type UserConstruct struct {
 	FirstName    string
 	LastName     string
 	Email        string
-	Password     []byte
+	Password     string
 	Organization string
 	Admin        bool
 	Creator      bool
+	register     time.Time
 }
 
 var (
@@ -90,21 +91,23 @@ func createUser(res http.ResponseWriter, req *http.Request) {
 
 	//TODO: WILL NEED TO CHECK TO MAKE SURE THAT THE EMAIL DOES NOT ALREADY EXIST
 
-	// Hash the password and check to see if the email address is already in use
-	// hashedPassword, err := bcrypt.GenerateFromPassword(user.Password, bcrypt.DefaultCost)
-	// if err != nil {
-	// 	log.Fatal("Error: failed to convert the password")
-	// }
+	//Hash the password and check to see if the email address is already in use
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatal("Error: failed to convert the password")
+	}
+	stmt, err := DB.Prepare(`INSERT INTO users(firstname, lastname, email, admin, creator, organization, password, register)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8);`)
+	defer stmt.Close()
+	if err != nil {
+		log.Fatal("Error: Error on prepare")
+	}
 
-	// rowErr := DB.QueryRow(
-	// 	`INSERT INTO users(firstname, lastname, email, admin, creator, organization, password, register)
-	// 	VALUES($1,$2,$3,$4,$5,$6,$7)`,
-	// 	user.FirstName, user.LastName, user.Email, false, false, user.Organization, hashedPassword, time.Now(),
-	// )
-	// if rowErr != nil {
-	// 	log.Fatal("Error: error creating new user")
-	// }
-
+	results, err := stmt.Exec(user.FirstName, user.LastName, user.Email, false, false, user.Organization, string(hashedPassword), time.Now())
+	fmt.Println(results)
+	if err != nil {
+		log.Fatal("Error: on exec")
+	}
 	token := jwt.New(jwt.SigningMethodHS256)
 
 	// set some claims
@@ -125,13 +128,12 @@ func createUser(res http.ResponseWriter, req *http.Request) {
 		Token     string `json:"token"`
 	}{
 		FirstName: user.FirstName,
-		LastName:  "tester",
+		LastName:  user.LastName,
 		Token:     SignedKey,
 	})
 	if err != nil {
 		log.Fatal("Error: error on creating json string")
 	}
-	fmt.Println(SignedKey)
 	res.Header().Set("Content-Type", "application/json")
 	res.Write(userInfo)
 
@@ -158,7 +160,7 @@ func authHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword(dbUser.Password, user.Password)
+	err = bcrypt.CompareHashAndPassword([]byte(dbUser.Password), user.Password)
 	if err != nil {
 		res.WriteHeader(http.StatusForbidden)
 		fmt.Fprint(res, "Invalid password")
