@@ -17,6 +17,8 @@ import (
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
 	"github.com/gorilla/mux"
+
+	"crypto/rsa"
 	// the use for the database
 	_ "github.com/lib/pq"
 )
@@ -43,41 +45,42 @@ var (
 	// DB is the postregres database
 	DB *sql.DB
 	// VerifyKey is the public key
-	VerifyKey []byte
+	VerifyKey *rsa.PublicKey
 	// SignKey is the private key
-	SignKey []byte
+	SignKey *rsa.PrivateKey
 	// SignedKey is the full key with signing
-	secretKey = "BANGERSANDMASH"
 )
 
 // API deals with all incoming requests
 func API() {
 
 	// Route version
-	myRouter := mux.NewRouter().StrictSlash(true)
-	v2 := myRouter.PathPrefix("/v2").Subrouter()
+	v2 := mux.NewRouter().StrictSlash(true)
 
 	// Public endpoints
 	v2.HandleFunc("/auth", authHandler).Methods("POST")
-	v2.HandleFunc("/auth/create/user", createUser).Methods("POST")
+	v2.HandleFunc("/auth/user/create", createUser).Methods("POST")
 
 	// Protected endpoints
-	protectedUserBaseRoute := mux.NewRouter()
-	v2.PathPrefix("/users").Handler(negroni.New(
+	protectedUserBaseRoute := mux.NewRouter().PathPrefix("/v2").Subrouter().StrictSlash(true)
+	protectedUserBaseRoute.HandleFunc("/", usersHandler).Methods("GET")
+	protectedUserBaseRoute.HandleFunc("/{user}", viewUserHandler).Methods("GET")
+
+	v2.PathPrefix("/v2").Handler(negroni.New(
 		negroni.HandlerFunc(authMiddleware),
 		negroni.Wrap(protectedUserBaseRoute),
 	))
 
 	// Protected user routes
-	protectedUserRoute := protectedUserBaseRoute.PathPrefix("/users").Subrouter()
-	protectedUserRoute.HandleFunc("/users", usersHandler).Methods("GET")
-	protectedUserRoute.HandleFunc("/users/{user}", viewUserHandler).Methods("GET")
+	// protectedUserRoute := protectedUserBaseRoute.PathPrefix("/users").Subrouter()
 
 	// Protected gallery, threads, posts for admin
 
 	// Spin up api
+	n := negroni.New()
+	n.UseHandler(v2)
 	fmt.Println("Server is running")
-	http.ListenAndServe(":12000", myRouter)
+	http.ListenAndServe(":12000", n)
 }
 
 func createUser(res http.ResponseWriter, req *http.Request) {
@@ -103,18 +106,18 @@ func createUser(res http.ResponseWriter, req *http.Request) {
 		log.Fatal("Error: Error on prepare")
 	}
 
-	results, err := stmt.Exec(user.FirstName, user.LastName, user.Email, false, false, user.Organization, string(hashedPassword), time.Now())
-	if err != nil {
+	_, ExecErr := stmt.Exec(user.FirstName, user.LastName, user.Email, false, false, user.Organization, string(hashedPassword), time.Now())
+	if ExecErr != nil {
 		log.Fatal("Error: on exec")
 	}
-	token := jwt.New(jwt.SigningMethodHS256)
+	token := jwt.New(jwt.SigningMethodRS256)
 
 	// set some claims
-	claims := make(jwt.MapClaims)
-	claims["username"] = user.Email
-	claims["password"] = user.Password
-	claims["exp"] = time.Now().Add(time.Hour * 72).Unix()
-	token.Claims = claims
+	// claims := make(jwt.MapClaims)
+	// claims["username"] = user.Email
+	// claims["password"] = user.Password
+	// claims["exp"] = time.Now().Add(time.Hour * 72).Unix()
+	// token.Claims = claims
 	SignedKey, err := token.SignedString(SignKey)
 	if err != nil {
 		log.Fatal("Error: Failed to sign key")
@@ -162,15 +165,17 @@ func authHandler(res http.ResponseWriter, req *http.Request) {
 		fmt.Fprint(res, "Invalid password")
 	}
 
-	token := jwt.New(jwt.SigningMethodHS256)
+	token := jwt.New(jwt.SigningMethodRS256)
 
 	// set some claims
-	claims := make(jwt.MapClaims)
-	claims["username"] = dbUser.Email
-	claims["password"] = dbUser.Password
-	claims["exp"] = time.Now().Add(time.Hour * 72).Unix()
-	token.Claims = claims
+	// claims := make(jwt.MapClaims)
+	// claims["username"] = dbUser.Email
+	// claims["password"] = dbUser.Password
+	// claims["exp"] = time.Now().Add(time.Hour * 72).Unix()
+	// token.Claims = claims
+
 	SignedKey, err := token.SignedString(SignKey)
+
 	if err != nil {
 		log.Fatal("Error: Failed to sign key")
 	}
@@ -194,8 +199,18 @@ func authHandler(res http.ResponseWriter, req *http.Request) {
 
 // usersHandler returns all users for a specific organization
 func usersHandler(res http.ResponseWriter, req *http.Request) {
-
+	example, err := json.Marshal(struct {
+		Example string `json:"Example"`
+	}{
+		Example: "This is just a test: the Endpoint for users worked",
+	})
+	if err != nil {
+		log.Fatal("Error: error on creating json string")
+	}
+	res.Header().Set("Content-Type", "application/json")
 	fmt.Println("Endpoint Hit: user")
+
+	res.Write(example)
 }
 
 // viewUserHandler requests information based on the user being viewed in the admin section
@@ -207,14 +222,13 @@ func viewUserHandler(res http.ResponseWriter, req *http.Request) {
 func authMiddleware(res http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
 
 	// token is returned if the Authrization in the header matches with the users token
-	token, err := request.ParseFromRequest(req, request.AuthorizationHeaderExtractor,
+	token, ParseErr := request.ParseFromRequest(req, request.AuthorizationHeaderExtractor,
 		func(token *jwt.Token) (interface{}, error) {
 			return VerifyKey, nil
 		})
 
-	// check to see if there is an error
-	if err != nil {
-		log.Fatal("Error: Unauthorized access")
+	if ParseErr != nil {
+		log.Fatal(ParseErr.Error())
 		return
 	}
 
