@@ -20,8 +20,8 @@ func API() {
 	v2 := mux.NewRouter().StrictSlash(true)
 
 	// Public endpoints
-	v2.HandleFunc("/auth", AuthHandler).Methods("POST")
-	v2.HandleFunc("/auth/user/create", CreateUser).Methods("POST")
+	v2.HandleFunc("/v2/auth", AuthHandler).Methods("POST")
+	v2.HandleFunc("/v2/auth/user/create", CreateUser).Methods("POST")
 
 	// Protected endpoints
 	protectedUserBaseRoute := mux.NewRouter().PathPrefix("/v2").Subrouter().StrictSlash(true)

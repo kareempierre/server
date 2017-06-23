@@ -43,6 +43,13 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 }
 
+// UsersList is a struct for the information returned on all users
+type UsersList struct {
+	FirstName string `json:"firstname"`
+	LastName  string `json:"lastname"`
+	Email     string `json:"email"`
+}
+
 var (
 	// DB is the postregres database
 	DB *sql.DB
@@ -106,12 +113,6 @@ func CreateUser(res http.ResponseWriter, req *http.Request) {
 	}
 	token := jwt.New(jwt.SigningMethodRS256)
 
-	// set some claims
-	// claims := make(jwt.MapClaims)
-	// claims["username"] = user.Email
-	// claims["password"] = user.Password
-	// claims["exp"] = time.Now().Add(time.Hour * 72).Unix()
-	// token.Claims = claims
 	SignedKey, err := token.SignedString(SignKey)
 	if err != nil {
 		errMessage, _ := json.Marshal(ErrorResponse{
@@ -226,11 +227,10 @@ func AuthHandler(res http.ResponseWriter, req *http.Request) {
 
 // UsersHandler returns all users for a specific organization
 func UsersHandler(res http.ResponseWriter, req *http.Request) {
-	example, err := json.Marshal(struct {
-		Example string `json:"Example"`
-	}{
-		Example: "This is just a test: the Endpoint for users worked",
-	})
+	var usersList UsersList
+	var usersArray []UsersList
+
+	rows, err := DB.Query(`SELECT firstname, lastname, email FROM users`)
 	if err != nil {
 		errMessage, _ := json.Marshal(ErrorResponse{
 			Type:    http.StatusInternalServerError,
@@ -238,13 +238,34 @@ func UsersHandler(res http.ResponseWriter, req *http.Request) {
 		})
 		res.WriteHeader(http.StatusInternalServerError)
 		res.Write(errMessage)
-		return
 	}
+	defer rows.Close()
 
+	for rows.Next() {
+		err := rows.Scan(&usersList.FirstName, &usersList.LastName, &usersList.Email)
+		if err != nil {
+			errMessage, _ := json.Marshal(ErrorResponse{
+				Type:    http.StatusInternalServerError,
+				Message: err.Error(),
+			})
+			res.WriteHeader(http.StatusInternalServerError)
+			res.Write(errMessage)
+		}
+		usersArray = append(usersArray, usersList)
+	}
+	fmt.Println(usersArray)
+	users, err := json.Marshal(usersArray)
+	if err != nil {
+		errMessage, _ := json.Marshal(ErrorResponse{
+			Type:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		res.WriteHeader(http.StatusInternalServerError)
+		res.Write(errMessage)
+	}
 	res.Header().Set("Content-Type", "application/json")
-	fmt.Println("Endpoint Hit: user")
+	res.Write(users)
 
-	res.Write(example)
 }
 
 // ViewUserHandler requests information based on the user being viewed in the admin section
