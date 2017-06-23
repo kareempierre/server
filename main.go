@@ -18,21 +18,20 @@ const (
 )
 
 func main() {
-	//TODO: WILL NEED TO ADD THE CRYPTO LIBRARY TO HANDLE THE RSA KEYS. NEED TO LEARN
-	// HOW TO DO THIS
+
 	// Initialize keys
 	initKeys()
 
 	// initialize database
 	db, err := sql.Open("postgres", "dbname=Bishop port=27018 sslmode=disable")
-
-	// Check for error on database initialization
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Failed to connect to the database")
 	}
+
+	// Ping test the database
 	err = db.Ping()
 	if err != nil {
-		log.Fatal("Error: Could not establish a connection with the database")
+		log.Fatal("Failed to ping the database")
 	}
 
 	// close database when server stops
@@ -46,51 +45,27 @@ func main() {
 }
 
 func initKeys() {
-	var err error
 
+	// privBytes is the private RSA file
 	privBytes, err := ioutil.ReadFile(privKeyPath)
-	checkErr(err)
-
-	api.SignKey, err = jwt.ParseRSAPrivateKeyFromPEM(privBytes)
-	checkErr(err)
-
-	// block, _ := pem.Decode(privKey)
-	// if block == nil {
-	// 	log.Fatal("Error: Failed to decode RSA")
-	// }
-	// if block.Type != "RSA PRIVATE KEY" {
-	// 	log.Fatal("Error: Type failed on RSA pem conversion")
-	// }
-	// // SignKey is the private key
-	// api.SignKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
-	// if err != nil {
-	// 	log.Fatal("Error: occured on Private key parse from pem")
-	// }
-
-	// VerifyKey is the public key
-	pubBytes, err := ioutil.ReadFile(pubKeyPath)
-	checkErr(err)
-
-	api.VerifyKey, err = jwt.ParseRSAPublicKeyFromPEM(pubBytes)
-	checkErr(err)
-
-	// pubBlock, _ := pem.Decode(pubKey)
-	// if pubBlock == nil {
-	// 	log.Fatal("Error: Failed to decode RSA")
-	// }
-
-	// pub, err := x509.ParsePKIXPublicKey(pubBlock.Bytes)
-	// if err != nil {
-	// 	log.Fatal("Error: occured on Public key parse from pem")
-	// }
-	// api.VerifyKey = pub.(*rsa.PublicKey)
-	//return SignKey, VerifyKey
-
-}
-
-func checkErr(err error) {
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal("Failed on private key")
 	}
-	return
+
+	// SignKey parses the private file
+	api.SignKey, err = jwt.ParseRSAPrivateKeyFromPEM(privBytes)
+	if err != nil {
+		log.Fatal("Failed on private key")
+	}
+	// pubBytes is the public RSA file
+	pubBytes, err := ioutil.ReadFile(pubKeyPath)
+	if err != nil {
+		log.Fatal("Failed on public key")
+	}
+
+	// VerifyKey parses the public file
+	api.VerifyKey, err = jwt.ParseRSAPublicKeyFromPEM(pubBytes)
+	if err != nil {
+		log.Fatal("Failed on public key")
+	}
 }
