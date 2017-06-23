@@ -2,21 +2,12 @@ package api
 
 import (
 	"database/sql"
-	"errors"
-	"fmt"
+	"encoding/json"
 	"net/http"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
-
-	"encoding/json"
-
 	jwt "github.com/dgrijalva/jwt-go"
-	"github.com/dgrijalva/jwt-go/request"
-
-	"crypto/rsa"
-	// the use for the database
-	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // UserCredentials requires an Email and Password
@@ -37,27 +28,23 @@ type UserConstruct struct {
 	register     time.Time
 }
 
+// UsersList is a struct for the information returned on all users
+type UsersList struct {
+	FirstName string `json:"firstname"`
+	LastName  string `json:"lastname"`
+	Email     string `json:"email"`
+	Admin     bool   `json:"admin"`
+}
+
 // ErrorResponse is the type and message of an error
 type ErrorResponse struct {
 	Type    int    `json:"type"`
 	Message string `json:"message"`
 }
 
-// UsersList is a struct for the information returned on all users
-type UsersList struct {
-	FirstName string `json:"firstname"`
-	LastName  string `json:"lastname"`
-	Email     string `json:"email"`
-}
-
 var (
-	// DB is the postregres database
-	DB *sql.DB
-	// VerifyKey is the public key
-	VerifyKey *rsa.PublicKey
-	// SignKey is the private key
-	SignKey *rsa.PrivateKey
-	// SignedKey is the full key with signing
+	// DBUser is the current logged in user
+	DBUser UserConstruct
 )
 
 // CreateUser creates a new user
@@ -150,7 +137,7 @@ func CreateUser(res http.ResponseWriter, req *http.Request) {
 // AuthHandler is used to authenticate the user logging in
 func AuthHandler(res http.ResponseWriter, req *http.Request) {
 	var user UserCredentials
-	var dbUser UserConstruct
+	//var dbUser UserConstruct
 
 	err := json.NewDecoder(req.Body).Decode(&user)
 	if err != nil {
@@ -165,8 +152,8 @@ func AuthHandler(res http.ResponseWriter, req *http.Request) {
 
 	// DB query needs to be made here
 	row := DB.QueryRow(`SELECT firstname, lastname, email, organization, creator, admin, password FROM users WHERE email=$1`, user.Email)
-	rowErr := row.Scan(&dbUser.FirstName, &dbUser.LastName, &dbUser.Email, &dbUser.Organization,
-		&dbUser.Creator, &dbUser.Admin, &dbUser.Password)
+	rowErr := row.Scan(&DBUser.FirstName, &DBUser.LastName, &DBUser.Email, &DBUser.Organization,
+		&DBUser.Creator, &DBUser.Admin, &DBUser.Password)
 
 	if rowErr != nil || rowErr == sql.ErrNoRows {
 		errMessage, _ := json.Marshal(ErrorResponse{
@@ -177,7 +164,7 @@ func AuthHandler(res http.ResponseWriter, req *http.Request) {
 		res.Write(errMessage)
 		return
 	}
-	err = bcrypt.CompareHashAndPassword([]byte(dbUser.Password), []byte(user.Password))
+	err = bcrypt.CompareHashAndPassword([]byte(DBUser.Password), []byte(user.Password))
 	if err != nil {
 		errMessage, _ := json.Marshal(ErrorResponse{
 			Type:    http.StatusUnauthorized,
@@ -206,8 +193,8 @@ func AuthHandler(res http.ResponseWriter, req *http.Request) {
 		LastName  string `json:"lastname"`
 		Token     string `json:"token"`
 	}{
-		FirstName: dbUser.FirstName,
-		LastName:  dbUser.LastName,
+		FirstName: DBUser.FirstName,
+		LastName:  DBUser.LastName,
 		Token:     SignedKey,
 	})
 	if err != nil {
@@ -230,7 +217,12 @@ func UsersHandler(res http.ResponseWriter, req *http.Request) {
 	var usersList UsersList
 	var usersArray []UsersList
 
-	rows, err := DB.Query(`SELECT firstname, lastname, email FROM users`)
+	//var organization string
+	rows, err := DB.Query(`SELECT firstname, lastname, email, admin FROM users WHERE organization=$1;`, DBUser.Organization)
+	if DBUser.Organization == "all" && DBUser.Creator == true {
+		rows, err = DB.Query(`SELECT firstname, lastname, email, admin FROM users;`)
+	}
+
 	if err != nil {
 		errMessage, _ := json.Marshal(ErrorResponse{
 			Type:    http.StatusInternalServerError,
@@ -239,10 +231,11 @@ func UsersHandler(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(http.StatusInternalServerError)
 		res.Write(errMessage)
 	}
+
 	defer rows.Close()
 
 	for rows.Next() {
-		err := rows.Scan(&usersList.FirstName, &usersList.LastName, &usersList.Email)
+		err := rows.Scan(&usersList.FirstName, &usersList.LastName, &usersList.Email, &usersList.Admin)
 		if err != nil {
 			errMessage, _ := json.Marshal(ErrorResponse{
 				Type:    http.StatusInternalServerError,
@@ -253,57 +246,41 @@ func UsersHandler(res http.ResponseWriter, req *http.Request) {
 		}
 		usersArray = append(usersArray, usersList)
 	}
-	fmt.Println(usersArray)
-	users, err := json.Marshal(usersArray)
-	if err != nil {
-		errMessage, _ := json.Marshal(ErrorResponse{
-			Type:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
-		res.WriteHeader(http.StatusInternalServerError)
-		res.Write(errMessage)
-	}
-	res.Header().Set("Content-Type", "application/json")
-	res.Write(users)
 
+	if DBUser.Admin == true {
+		users, err := json.Marshal(usersArray)
+		if err != nil {
+			errMessage, _ := json.Marshal(ErrorResponse{
+				Type:    http.StatusInternalServerError,
+				Message: err.Error(),
+			})
+			res.WriteHeader(http.StatusInternalServerError)
+			res.Write(errMessage)
+		}
+		res.Header().Set("Content-Type", "application/json")
+		res.Write(users)
+	} else {
+		unAuthUser, err := json.Marshal(struct {
+			Type  int  `json:"type"`
+			Admin bool `json:"admin"`
+		}{
+			Type:  http.StatusUnauthorized,
+			Admin: false,
+		})
+		if err != nil {
+			errMessage, _ := json.Marshal(ErrorResponse{
+				Type:    http.StatusUnauthorized,
+				Message: err.Error(),
+			})
+			res.WriteHeader(http.StatusUnauthorized)
+			res.Write(errMessage)
+		}
+		res.Header().Set("Content-Type", "application/json")
+		res.Write(unAuthUser)
+	}
 }
 
 // ViewUserHandler requests information based on the user being viewed in the admin section
 func ViewUserHandler(res http.ResponseWriter, req *http.Request) {
-
-}
-
-// AuthMiddleware authenticates the user logging in
-func AuthMiddleware(res http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
-
-	// token is returned if the Authrization in the header matches with the users token
-	token, err := request.ParseFromRequest(req, request.AuthorizationHeaderExtractor,
-		func(token *jwt.Token) (interface{}, error) {
-			return VerifyKey, nil
-		})
-	if err != nil {
-		errMessage, _ := json.Marshal(ErrorResponse{
-			Type:    http.StatusUnauthorized,
-			Message: err.Error(),
-		})
-		res.WriteHeader(http.StatusUnauthorized)
-		res.Write(errMessage)
-		return
-	}
-
-	if token.Valid {
-		next(res, req)
-	}
-
-	if !token.Valid {
-		unauthorizedMessage, _ := json.Marshal(struct {
-			Error string `json:"error"`
-		}{
-			Error: errors.New("Unauthorized Entry").Error(),
-		})
-		res.WriteHeader(http.StatusUnauthorized)
-		res.Write(unauthorizedMessage)
-		return
-	}
 
 }
