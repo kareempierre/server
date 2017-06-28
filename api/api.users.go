@@ -282,5 +282,7 @@ func UsersHandler(res http.ResponseWriter, req *http.Request) {
 
 // ViewUserHandler requests information based on the user being viewed in the admin section
 func ViewUserHandler(res http.ResponseWriter, req *http.Request) {
+	//var email string
 
+	//row := DB.QueryRow(`SELECT firstname, lastname, email`)
 }

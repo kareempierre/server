@@ -42,14 +42,14 @@ func API() {
 	protectedSubRoute.HandleFunc("/users/{user}", ViewUserHandler).Methods("GET")
 	// Blog
 	protectedSubRoute.HandleFunc("/blog", BlogHandler).Methods("GET")
+	protectedSubRoute.HandleFunc("/blog/{blog}", ViewBlogHandler).Methods("GET")
+	// Gallery
+	protectedSubRoute.HandleFunc("/gallery", GalleryHandler).Methods("GET")
 
 	v2.PathPrefix("/v2").Handler(negroni.New(
 		negroni.HandlerFunc(AuthMiddleware),
 		negroni.Wrap(protectedSubRoute),
 	))
-
-	// Protected user routes
-	// protectedUserRoute := protectedUserBaseRoute.PathPrefix("/users").Subrouter()
 
 	// Protected gallery, threads, posts for admin
 
