@@ -43,23 +43,24 @@ var (
 
 // CreateUser creates a new user
 func CreateUser(res http.ResponseWriter, req *http.Request) {
+	// Temporary user variable when grabbing the information from the body
 	var user UserConstruct
 
+	// Decode the information and pass into the temporary variable
 	err := json.NewDecoder(req.Body).Decode(&user)
 	if err, ok := OnError(err, http.StatusBadRequest); !ok {
 		res.Write(err)
 		return
 	}
 
-	//TODO: WILL NEED TO CHECK TO MAKE SURE THAT THE EMAIL DOES NOT ALREADY EXIST
-
-	//Hash the password and check to see if the email address is already in use
+	//Hash the current password from the temporary variable
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err, ok := OnError(err, http.StatusBadRequest); !ok {
 		res.Write(err)
 		return
 	}
 
+	// Prepare Qeury returns statment to insert new user
 	stmt, err := DB.Prepare(`INSERT INTO users(firstname, lastname, email, admin, creator, organization, password, register)
 		VALUES($1,$2,$3,$4,$5,$6,$7,$8);`)
 	defer stmt.Close()
@@ -68,20 +69,22 @@ func CreateUser(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Execute the prepared statement and add to the DB
 	_, err = stmt.Exec(user.FirstName, user.LastName, user.Email, false, false, user.Organization, string(hashedPassword), time.Now())
 	if err, ok := OnError(err, http.StatusInternalServerError); !ok {
 		res.Write(err)
 		return
 	}
 
+	// Generate a new signing key to assign to the created user
 	token := jwt.New(jwt.SigningMethodRS256)
-
 	SignedKey, err := token.SignedString(SignKey)
 	if err, ok := OnError(err, http.StatusUnauthorized); !ok {
 		res.Write(err)
 		return
 	}
 
+	// Create the new user and Marshal data to be sent back
 	userInfo, err := json.Marshal(struct {
 		FirstName string `json:"firstname"`
 		LastName  string `json:"lastname"`
@@ -96,6 +99,7 @@ func CreateUser(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Respond with user information and json key
 	res.Header().Set("Content-Type", "application/json")
 	res.Write(userInfo)
 
@@ -103,16 +107,17 @@ func CreateUser(res http.ResponseWriter, req *http.Request) {
 
 // AuthHandler is used to authenticate the user logging in
 func AuthHandler(res http.ResponseWriter, req *http.Request) {
+	// Temporary login variable
 	var user UserCredentials
-	//var dbUser UserConstruct
 
+	// Get information from body of the request
 	err := json.NewDecoder(req.Body).Decode(&user)
 	if err, ok := OnError(err, http.StatusBadRequest); !ok {
 		res.Write(err)
 		return
 	}
 
-	// DB query needs to be made here
+	// Query row from database using the information gained from the temporary variable
 	row := DB.QueryRow(`SELECT firstname, lastname, email, organization, creator, admin, password FROM users WHERE email=$1`, user.Email)
 	rowErr := row.Scan(&DBUser.FirstName, &DBUser.LastName, &DBUser.Email, &DBUser.Organization,
 		&DBUser.Creator, &DBUser.Admin, &DBUser.Password)
@@ -127,12 +132,14 @@ func AuthHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Check password to make sure that the using logging in is the correct user
 	err = bcrypt.CompareHashAndPassword([]byte(DBUser.Password), []byte(user.Password))
 	if err, ok := OnError(err, http.StatusUnauthorized); !ok {
 		res.Write(err)
 		return
 	}
 
+	// Generate token for the user logging in
 	token := jwt.New(jwt.SigningMethodRS256)
 
 	SignedKey, err := token.SignedString(SignKey)
@@ -141,6 +148,7 @@ func AuthHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Create user information collected from the DB
 	userInfo, err := json.Marshal(struct {
 		FirstName string `json:"firstname"`
 		LastName  string `json:"lastname"`
@@ -155,6 +163,7 @@ func AuthHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Respond with information
 	res.Header().Set("Content-Type", "application/json")
 	res.Write(userInfo)
 
@@ -162,10 +171,12 @@ func AuthHandler(res http.ResponseWriter, req *http.Request) {
 
 // UsersHandler returns all users for a specific organization
 func UsersHandler(res http.ResponseWriter, req *http.Request) {
+	// user list variable
 	var usersList UsersList
+	// user array of user lists
 	var usersArray []UsersList
 
-	//var organization string
+	// Get all users listed in a specific organization
 	rows, err := DB.Query(`SELECT firstname, lastname, email, admin FROM users WHERE organization=$1;`, DBUser.Organization)
 	if DBUser.Organization == "all" && DBUser.Creator == true {
 		rows, err = DB.Query(`SELECT firstname, lastname, email, admin FROM users;`)
@@ -186,6 +197,8 @@ func UsersHandler(res http.ResponseWriter, req *http.Request) {
 		usersArray = append(usersArray, usersList)
 	}
 
+	// If user requesting this information is an admin return all the users for that organization
+	// else The user requesting this information is returned a bool specifying they are not an admin
 	if DBUser.Admin == true {
 		users, err := json.Marshal(usersArray)
 		if err, ok := OnError(err, http.StatusInternalServerError); !ok {
