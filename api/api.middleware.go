@@ -12,6 +12,12 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// ErrorResponse is the type and message of an error
+type ErrorResponse struct {
+	Type    int    `json:"type"`
+	Message string `json:"message"`
+}
+
 // AuthMiddleware authenticates the user logging in
 func AuthMiddleware(res http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
 
@@ -45,4 +51,16 @@ func AuthMiddleware(res http.ResponseWriter, req *http.Request, next http.Handle
 		return
 	}
 
+}
+
+// OnError sets the struct ErrorResponse
+func OnError(err error, status int) ([]byte, bool) {
+	if err != nil {
+		errMessage, _ := json.Marshal(ErrorResponse{
+			Type:    status,
+			Message: err.Error(),
+		})
+		return errMessage, false
+	}
+	return nil, true
 }

@@ -36,12 +36,6 @@ type UsersList struct {
 	Admin     bool   `json:"admin"`
 }
 
-// ErrorResponse is the type and message of an error
-type ErrorResponse struct {
-	Type    int    `json:"type"`
-	Message string `json:"message"`
-}
-
 var (
 	// DBUser is the current logged in user
 	DBUser UserConstruct
@@ -52,13 +46,8 @@ func CreateUser(res http.ResponseWriter, req *http.Request) {
 	var user UserConstruct
 
 	err := json.NewDecoder(req.Body).Decode(&user)
-	if err != nil {
-		errMessage, _ := json.Marshal(ErrorResponse{
-			Type:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		res.WriteHeader(http.StatusBadRequest)
-		res.Write(errMessage)
+	if err, ok := OnError(err, http.StatusBadRequest); !ok {
+		res.Write(err)
 		return
 	}
 
@@ -66,48 +55,30 @@ func CreateUser(res http.ResponseWriter, req *http.Request) {
 
 	//Hash the password and check to see if the email address is already in use
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
-	if err != nil {
-		errMessage, _ := json.Marshal(ErrorResponse{
-			Type:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		res.WriteHeader(http.StatusBadRequest)
-		res.Write(errMessage)
+	if err, ok := OnError(err, http.StatusBadRequest); !ok {
+		res.Write(err)
 		return
 	}
+
 	stmt, err := DB.Prepare(`INSERT INTO users(firstname, lastname, email, admin, creator, organization, password, register)
 		VALUES($1,$2,$3,$4,$5,$6,$7,$8);`)
 	defer stmt.Close()
-	if err != nil {
-		errMessage, _ := json.Marshal(ErrorResponse{
-			Type:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
-		res.WriteHeader(http.StatusInternalServerError)
-		res.Write(errMessage)
+	if err, ok := OnError(err, http.StatusInternalServerError); !ok {
+		res.Write(err)
 		return
 	}
 
-	_, ExecErr := stmt.Exec(user.FirstName, user.LastName, user.Email, false, false, user.Organization, string(hashedPassword), time.Now())
-	if ExecErr != nil {
-		errMessage, _ := json.Marshal(ErrorResponse{
-			Type:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
-		res.WriteHeader(http.StatusInternalServerError)
-		res.Write(errMessage)
+	_, err = stmt.Exec(user.FirstName, user.LastName, user.Email, false, false, user.Organization, string(hashedPassword), time.Now())
+	if err, ok := OnError(err, http.StatusInternalServerError); !ok {
+		res.Write(err)
 		return
 	}
+
 	token := jwt.New(jwt.SigningMethodRS256)
 
 	SignedKey, err := token.SignedString(SignKey)
-	if err != nil {
-		errMessage, _ := json.Marshal(ErrorResponse{
-			Type:    http.StatusUnauthorized,
-			Message: err.Error(),
-		})
-		res.WriteHeader(http.StatusUnauthorized)
-		res.Write(errMessage)
+	if err, ok := OnError(err, http.StatusUnauthorized); !ok {
+		res.Write(err)
 		return
 	}
 
@@ -120,15 +91,11 @@ func CreateUser(res http.ResponseWriter, req *http.Request) {
 		LastName:  user.LastName,
 		Token:     SignedKey,
 	})
-	if err != nil {
-		errMessage, _ := json.Marshal(ErrorResponse{
-			Type:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
-		res.WriteHeader(http.StatusInternalServerError)
-		res.Write(errMessage)
+	if err, ok := OnError(err, http.StatusInternalServerError); !ok {
+		res.Write(err)
 		return
 	}
+
 	res.Header().Set("Content-Type", "application/json")
 	res.Write(userInfo)
 
@@ -140,13 +107,8 @@ func AuthHandler(res http.ResponseWriter, req *http.Request) {
 	//var dbUser UserConstruct
 
 	err := json.NewDecoder(req.Body).Decode(&user)
-	if err != nil {
-		errMessage, _ := json.Marshal(ErrorResponse{
-			Type:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		res.WriteHeader(http.StatusBadRequest)
-		res.Write(errMessage)
+	if err, ok := OnError(err, http.StatusBadRequest); !ok {
+		res.Write(err)
 		return
 	}
 
@@ -164,27 +126,18 @@ func AuthHandler(res http.ResponseWriter, req *http.Request) {
 		res.Write(errMessage)
 		return
 	}
+
 	err = bcrypt.CompareHashAndPassword([]byte(DBUser.Password), []byte(user.Password))
-	if err != nil {
-		errMessage, _ := json.Marshal(ErrorResponse{
-			Type:    http.StatusUnauthorized,
-			Message: err.Error(),
-		})
-		res.WriteHeader(http.StatusUnauthorized)
-		res.Write(errMessage)
+	if err, ok := OnError(err, http.StatusUnauthorized); !ok {
+		res.Write(err)
 		return
 	}
 
 	token := jwt.New(jwt.SigningMethodRS256)
 
 	SignedKey, err := token.SignedString(SignKey)
-	if err != nil {
-		errMessage, _ := json.Marshal(ErrorResponse{
-			Type:    http.StatusBadRequest,
-			Message: err.Error(),
-		})
-		res.WriteHeader(http.StatusBadRequest)
-		res.Write(errMessage)
+	if err, ok := OnError(err, http.StatusBadRequest); !ok {
+		res.Write(err)
 		return
 	}
 
@@ -197,13 +150,8 @@ func AuthHandler(res http.ResponseWriter, req *http.Request) {
 		LastName:  DBUser.LastName,
 		Token:     SignedKey,
 	})
-	if err != nil {
-		errMessage, _ := json.Marshal(ErrorResponse{
-			Type:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
-		res.WriteHeader(http.StatusInternalServerError)
-		res.Write(errMessage)
+	if err, ok := OnError(err, http.StatusInternalServerError); !ok {
+		res.Write(err)
 		return
 	}
 
@@ -222,41 +170,29 @@ func UsersHandler(res http.ResponseWriter, req *http.Request) {
 	if DBUser.Organization == "all" && DBUser.Creator == true {
 		rows, err = DB.Query(`SELECT firstname, lastname, email, admin FROM users;`)
 	}
-
-	if err != nil {
-		errMessage, _ := json.Marshal(ErrorResponse{
-			Type:    http.StatusInternalServerError,
-			Message: err.Error(),
-		})
-		res.WriteHeader(http.StatusInternalServerError)
-		res.Write(errMessage)
+	if err, ok := OnError(err, http.StatusInternalServerError); !ok {
+		res.Write(err)
+		return
 	}
 
 	defer rows.Close()
 
 	for rows.Next() {
 		err := rows.Scan(&usersList.FirstName, &usersList.LastName, &usersList.Email, &usersList.Admin)
-		if err != nil {
-			errMessage, _ := json.Marshal(ErrorResponse{
-				Type:    http.StatusInternalServerError,
-				Message: err.Error(),
-			})
-			res.WriteHeader(http.StatusInternalServerError)
-			res.Write(errMessage)
+		if err, ok := OnError(err, http.StatusInternalServerError); !ok {
+			res.Write(err)
+			return
 		}
 		usersArray = append(usersArray, usersList)
 	}
 
 	if DBUser.Admin == true {
 		users, err := json.Marshal(usersArray)
-		if err != nil {
-			errMessage, _ := json.Marshal(ErrorResponse{
-				Type:    http.StatusInternalServerError,
-				Message: err.Error(),
-			})
-			res.WriteHeader(http.StatusInternalServerError)
-			res.Write(errMessage)
+		if err, ok := OnError(err, http.StatusInternalServerError); !ok {
+			res.Write(err)
+			return
 		}
+
 		res.Header().Set("Content-Type", "application/json")
 		res.Write(users)
 	} else {
@@ -267,13 +203,9 @@ func UsersHandler(res http.ResponseWriter, req *http.Request) {
 			Type:  http.StatusUnauthorized,
 			Admin: false,
 		})
-		if err != nil {
-			errMessage, _ := json.Marshal(ErrorResponse{
-				Type:    http.StatusUnauthorized,
-				Message: err.Error(),
-			})
-			res.WriteHeader(http.StatusUnauthorized)
-			res.Write(errMessage)
+		if err, ok := OnError(err, http.StatusUnauthorized); !ok {
+			res.Write(err)
+			return
 		}
 		res.Header().Set("Content-Type", "application/json")
 		res.Write(unAuthUser)
