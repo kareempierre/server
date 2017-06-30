@@ -12,9 +12,9 @@ import (
 
 const (
 	// privKeyPath is the path to the private key
-	privKeyPath = "keys/app.rsa"
+	privKeyPath = "./keys/app.rsa"
 	// pubkeyPath is the path to the public key
-	pubKeyPath = "keys/app.rsa.pub"
+	pubKeyPath = "./keys/app.rsa.pub"
 )
 
 func main() {
