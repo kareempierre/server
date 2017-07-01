@@ -2,8 +2,8 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"io/ioutil"
-	"log"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	_ "github.com/lib/pq"
@@ -25,13 +25,13 @@ func main() {
 	// initialize database
 	db, err := sql.Open("postgres", "dbname=Bishop port=27018 sslmode=disable")
 	if err != nil {
-		log.Fatal("Failed to connect to the database")
+		fmt.Println("Failed to connect to the database")
 	}
 
 	// Ping test the database
 	err = db.Ping()
 	if err != nil {
-		log.Fatal("Failed to ping the database")
+		fmt.Println("Failed to ping the database")
 	}
 
 	// close database when server stops
@@ -49,23 +49,23 @@ func initKeys() {
 	// privBytes is the private RSA file
 	privBytes, err := ioutil.ReadFile(privKeyPath)
 	if err != nil {
-		log.Fatal("Failed on private key")
+		fmt.Println("failed to read path of key")
 	}
 
 	// SignKey parses the private file
 	api.SignKey, err = jwt.ParseRSAPrivateKeyFromPEM(privBytes)
 	if err != nil {
-		log.Fatal("Failed on private key")
+		fmt.Println("failed to parse private key")
 	}
 	// pubBytes is the public RSA file
 	pubBytes, err := ioutil.ReadFile(pubKeyPath)
 	if err != nil {
-		log.Fatal("Failed on public key")
+		fmt.Println("failed to read pub key")
 	}
 
 	// VerifyKey parses the public file
 	api.VerifyKey, err = jwt.ParseRSAPublicKeyFromPEM(pubBytes)
 	if err != nil {
-		log.Fatal("Failed on public key")
+		fmt.Println("failed to parse key")
 	}
 }
