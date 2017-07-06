@@ -23,7 +23,7 @@ func main() {
 	initKeys()
 
 	// initialize database
-	db, err := sql.Open("postgres", "dbname=Macros port=5432 sslmode=disable")
+	db, err := sql.Open("postgres", "user=kareem dbname=Macros port=5432 sslmode=disable")
 	if err != nil {
 		fmt.Println("Failed to connect to the database")
 	}
