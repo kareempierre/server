@@ -2,12 +2,16 @@ package main
 
 import (
 	"database/sql"
+	"flag"
 	"fmt"
 	"io/ioutil"
+
+	"log"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	_ "github.com/lib/pq"
 	"github.com/server/api"
+	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -17,13 +21,33 @@ const (
 	pubKeyPath = "./keys/app.rsa.pub"
 )
 
-func main() {
+// DBConfig configuration struct
+type DBConfig struct {
+	user     string `yaml:"user"`
+	password string `yaml:"password"`
+	dbname   string `yaml:"dbname"`
+	host     string `yaml:"host"`
+	port     string `yaml:"port"`
+	sslmode  string `yaml:"sslmode"`
+}
 
+func main() {
+	var dbConfig DBConfig
 	// Initialize keys
 	initKeys()
+	filePtr := flag.String("f", "db.config.dev.yaml",
+		"Path to the config file. Default: db.config.dev.yaml")
 
+	dbConfig.getConfig(*filePtr)
 	// initialize database
-	db, err := sql.Open("postgres", "user=kareem dbname=Macros port=5432 sslmode=disable")
+	db, err := sql.Open("postgres",
+		"user="+dbConfig.user+
+			" dbname="+dbConfig.dbname+
+			" port="+dbConfig.port+
+			" sslmode="+dbConfig.sslmode+
+			" host="+dbConfig.host+
+			" password="+dbConfig.password)
+
 	if err != nil {
 		fmt.Println("Failed to connect to the database")
 	}
@@ -68,4 +92,17 @@ func initKeys() {
 	if err != nil {
 		fmt.Println("failed to parse key")
 	}
+}
+
+func (c *DBConfig) getConfig(file string) *DBConfig {
+	yamlFile, err := ioutil.ReadFile(file)
+	if err != nil {
+		log.Fatal("Failed to read db configuration file")
+	}
+
+	err = yaml.Unmarshal(yamlFile, c)
+	if err != nil {
+		log.Fatal("Failed to Unmarshal DB configuration file")
+	}
+	return c
 }
