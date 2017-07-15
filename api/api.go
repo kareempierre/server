@@ -44,7 +44,7 @@ func API() {
 	protectedSubRoute.HandleFunc("/blog", BlogHandler).Methods("GET")
 	protectedSubRoute.HandleFunc("/blog/{blog}", ViewBlogHandler).Methods("GET")
 	// Gallery
-	protectedSubRoute.HandleFunc("/gallery", GalleryHandler).Methods("GET")
+	protectedSubRoute.HandleFunc("/gallery", ViewGalleryHandler).Methods("GET")
 
 	v2.PathPrefix("/v2").Handler(negroni.New(
 		negroni.HandlerFunc(AuthMiddleware),

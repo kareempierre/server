@@ -95,11 +95,13 @@ func initKeys() {
 }
 
 func (c *DBConfig) getConfig(file string) *DBConfig {
+	// Read from a yaml file
 	yamlFile, err := ioutil.ReadFile(file)
 	if err != nil {
 		log.Fatal("Failed to read db configuration file")
 	}
 
+	// Unmarshal yaml file
 	err = yaml.Unmarshal(yamlFile, c)
 	if err != nil {
 		log.Fatal("Failed to Unmarshal DB configuration file")
