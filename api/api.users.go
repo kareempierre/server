@@ -42,7 +42,7 @@ var (
 	DBUser UserConstruct
 )
 
-// CreateUser creates a new user
+// CreateUser creates a new organization member
 func CreateUser(res http.ResponseWriter, req *http.Request) {
 	// Temporary user variable when grabbing the information from the body
 	var user UserConstruct

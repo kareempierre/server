@@ -1,6 +1,4 @@
-user: kareem
-password: mothfighter123
-host: 138.197.172.160
-port: 5432
-dbname: Macros
+host: localhost
+port: 5433
+dbname: Bishop
 sslmode: no SSL

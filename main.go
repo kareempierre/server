@@ -8,6 +8,8 @@ import (
 
 	"log"
 
+	"os"
+
 	jwt "github.com/dgrijalva/jwt-go"
 	_ "github.com/lib/pq"
 	"github.com/server/api"
@@ -23,30 +25,45 @@ const (
 
 // DBConfig configuration struct
 type DBConfig struct {
-	user     string `yaml:"user"`
-	password string `yaml:"password"`
-	dbname   string `yaml:"dbname"`
-	host     string `yaml:"host"`
-	port     string `yaml:"port"`
-	sslmode  string `yaml:"sslmode"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Dbname   string `yaml:"dbname"`
+	Host     string `yaml:"host"`
+	Port     string `yaml:"port"`
+	Sslmode  string `yaml:"sslmode"`
 }
 
 func main() {
 	var dbConfig DBConfig
+	var filePtr *string
+	var err error
 	// Initialize keys
 	initKeys()
-	filePtr := flag.String("f", "db.config.dev.yaml",
-		"Path to the config file. Default: db.config.dev.yaml")
+
+	if os.Getenv("GOLANG_ENV") == "production" {
+		filePtr = flag.String("f", "db.config.prod.yaml",
+			"Path to the config file. Default: db.config.prodcution.yaml")
+
+	} else {
+		filePtr = flag.String("f", "db.config.dev.yaml",
+			"Path to the config file. Default: db.config.dev.yaml")
+	}
 
 	dbConfig.getConfig(*filePtr)
+
 	// initialize database
 	db, err := sql.Open("postgres",
-		"user="+dbConfig.user+
-			" dbname="+dbConfig.dbname+
-			" port="+dbConfig.port+
-			" sslmode="+dbConfig.sslmode+
-			" host="+dbConfig.host+
-			" password="+dbConfig.password)
+		"user="+dbConfig.User+
+			" dbname="+dbConfig.Dbname+
+			" port="+dbConfig.Port+
+			" sslmode="+dbConfig.Sslmode+
+			" host="+dbConfig.Host+
+			" password="+dbConfig.Password)
+
+	if os.Getenv("GOLANG_ENV") == "development" {
+		fmt.Println("This ran")
+		db, err = sql.Open("postgres", "dbname=Bishop user=Bishop host=localhost port=5433")
+	}
 
 	if err != nil {
 		fmt.Println("Failed to connect to the database")
@@ -94,7 +111,7 @@ func initKeys() {
 	}
 }
 
-func (c *DBConfig) getConfig(file string) *DBConfig {
+func (c *DBConfig) getConfig(file string) {
 	// Read from a yaml file
 	yamlFile, err := ioutil.ReadFile(file)
 	if err != nil {
@@ -106,5 +123,4 @@ func (c *DBConfig) getConfig(file string) *DBConfig {
 	if err != nil {
 		log.Fatal("Failed to Unmarshal DB configuration file")
 	}
-	return c
 }
